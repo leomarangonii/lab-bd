@@ -1,0 +1,67 @@
+# ============================================================================
+# docker-compose.yml
+# ----------------------------------------------------------------------------
+# Sobe o projeto inteiro com um comando:  docker compose up --build
+#
+# Servicos:
+#   db       -> PostgreSQL. Na PRIMEIRA subida roda os scripts de sql/ na ordem
+#               (99_run_all.sql) e carrega os CSV/TSV de data/.
+#   backend  -> API Node/Express (porta 3000).
+#   frontend -> Arquivos estaticos servidos por nginx (porta 5500).
+#
+# Acesso depois de subir:  http://localhost:5500
+# ============================================================================
+
+services:
+  db:
+    image: postgres:16
+    container_name: f1db_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: f1db_grupo5
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Scripts e dados ficam disponiveis dentro do container para a carga inicial.
+      - ./sql:/sql:ro
+      - ./data:/data:ro
+      # Roda apenas quando o volume db_data esta vazio (primeira subida).
+      - ./docker/db-init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d f1db_grupo5"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    container_name: f1db_backend
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: f1db_grupo5
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SESSION_SECRET: chave_do_projeto
+      FRONTEND_ORIGIN: http://localhost:5500
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: nginx:alpine
+    container_name: f1db_frontend
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "5500:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

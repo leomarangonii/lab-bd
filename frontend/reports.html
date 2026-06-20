@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema Fórmula 1 — Relatórios</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            formula: { red: "#dc2626", dark: "#111827", light: "#f3f4f6" }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="css/custom.css">
+</head>
+<body class="min-h-screen bg-gray-100">
+  <header class="bg-gray-900 text-white shadow-lg">
+    <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h1 class="text-xl font-bold">Sistema Fórmula 1</h1>
+        <p id="user-info" class="text-sm text-gray-300"></p>
+      </div>
+      <nav class="flex flex-wrap gap-2">
+        <a href="dashboard.html" class="rounded-lg bg-gray-700 px-4 py-2 hover:bg-gray-600">Dashboard</a>
+        <a href="reports.html" class="rounded-lg bg-gray-700 px-4 py-2 hover:bg-gray-600">Relatórios</a>
+        <button id="logout-button" class="rounded-lg bg-red-600 px-4 py-2 hover:bg-red-700">Sair</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl space-y-6 px-4 py-8">
+    <section id="report-buttons" class="flex flex-wrap gap-3"></section>
+    <section id="report-filters"></section>
+    <section id="report-result" aria-live="polite"></section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/reports.js"></script>
+</body>
+</html>

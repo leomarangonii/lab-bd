@@ -1,0 +1,3 @@
+# Scripts shell precisam manter quebra de linha LF para rodar dentro dos containers.
+*.sh text eol=lf
+docker/db-init.sh text eol=lf

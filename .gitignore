@@ -1,0 +1,16 @@
+# Dependencias e artefatos do Node
+node_modules/
+
+# Segredos (NUNCA versionar) e arquivos temporarios de execucao
+.env
+backend/uploads/
+
+# Pastas temporarias
+tmp/
+
+# Pacote redundante (os dados ja estao em data/ e os scripts em sql/)
+p4_bd_schema_final_dados_csv_corrigido_v2.zip
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
