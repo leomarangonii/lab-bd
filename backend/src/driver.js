@@ -13,7 +13,7 @@ router.get("/dashboard", async (req, res) => {
   const driverId = req.session.user.idOriginal;
 
   try {
-    const result = await pool.query("SELECT * FROM p4_driver_dashboard($1)", [driverId]);
+    const result = await pool.query("SELECT * FROM driver_dashboard($1)", [driverId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Piloto não encontrado." });
@@ -31,7 +31,7 @@ router.get("/reports/points", async (req, res) => {
   const driverId = req.session.user.idOriginal;
 
   try {
-    const result = await pool.query("SELECT * FROM p4_report_driver_points_by_year_race($1)", [driverId]);
+    const result = await pool.query("SELECT * FROM report_driver_points_by_year_race($1)", [driverId]);
     return res.json({ success: true, data: result.rows });
   } catch (err) {
     const { status, message } = mapDbError(err);
@@ -44,7 +44,7 @@ router.get("/reports/status", async (req, res) => {
   const driverId = req.session.user.idOriginal;
 
   try {
-    const result = await pool.query("SELECT * FROM p4_report_driver_status_count($1)", [driverId]);
+    const result = await pool.query("SELECT * FROM report_driver_status_count($1)", [driverId]);
     return res.json({ success: true, data: result.rows });
   } catch (err) {
     const { status, message } = mapDbError(err);

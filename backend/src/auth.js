@@ -52,7 +52,7 @@ router.post("/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT userid, login, tipo, id_original, nome_exibicao FROM p4_authenticate($1, $2)",
+      "SELECT userid, login, tipo, id_original, nome_exibicao FROM authenticate($1, $2)",
       [login, password]
     );
 
@@ -72,7 +72,7 @@ router.post("/login", async (req, res) => {
     };
 
     // Registra o acesso no log de usuarios.
-    await pool.query("SELECT p4_log_access($1, $2)", [row.userid, "LOGIN"]);
+    await pool.query("SELECT log_access($1, $2)", [row.userid, "LOGIN"]);
 
     return res.json({ success: true, data: req.session.user });
   } catch (err) {
@@ -86,7 +86,7 @@ router.post("/logout", requireAuth, async (req, res) => {
   const userid = req.session.user.userid;
 
   try {
-    await pool.query("SELECT p4_log_access($1, $2)", [userid, "LOGOUT"]);
+    await pool.query("SELECT log_access($1, $2)", [userid, "LOGOUT"]);
 
     req.session.destroy(() => {
       res.json({ success: true, data: { message: "Logout realizado com sucesso." } });

@@ -2,9 +2,9 @@
    05_functions.sql
    ------------------------------------------------------------------------------------------------------------
    Arquivo dedicado às funções e procedures:
-   - autenticação e log do P4;
-   - funções/procedures inspiradas no gabarito T2;
-   - funções de dashboard, relatórios e ações do P4.
+   - autenticação e log;
+   - funções/procedures de consulta;
+   - funções de dashboard, relatórios e ações do sistema.
    ============================================================================================================ */
 
 BEGIN;
@@ -13,8 +13,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS cube;
 CREATE EXTENSION IF NOT EXISTS earthdistance;
 
-/* Autenticação usada pelo backend. Retorna 0 linhas se login/senha estiverem incorretos. */
-CREATE OR REPLACE FUNCTION p4_authenticate(p_login TEXT, p_senha TEXT)
+/* authenticate: existe para autenticar usuários no backend; valida login/senha e retorna dados de sessão. */
+CREATE OR REPLACE FUNCTION authenticate(p_login TEXT, p_senha TEXT)
 RETURNS TABLE (
     userid INTEGER,
     login TEXT,
@@ -42,7 +42,8 @@ AS $$
       AND u.password = crypt(p_senha, u.password);
 $$;
 
-CREATE OR REPLACE FUNCTION p4_log_access(p_userid INTEGER, p_action TEXT)
+/* log_access: existe para auditar acessos; grava LOGIN ou LOGOUT em users_log. */
+CREATE OR REPLACE FUNCTION log_access(p_userid INTEGER, p_action TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
@@ -60,9 +61,10 @@ CREATE EXTENSION IF NOT EXISTS cube;
 CREATE EXTENSION IF NOT EXISTS earthdistance;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Funções/procedures compatíveis com o gabarito T2
+   Funções/procedures de consulta
    ------------------------------------------------------------------------------------------------------------ */
 DROP FUNCTION IF EXISTS Nome_Nacionalidade(TEXT);
+/* Nome_Nacionalidade: existe para consultar a nacionalidade de uma escuderia pelo nome. */
 CREATE OR REPLACE FUNCTION Nome_Nacionalidade(Nome TEXT)
 RETURNS TEXT AS $$
 DECLARE
@@ -78,6 +80,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP FUNCTION IF EXISTS Pilotos_Nacionalidade(TEXT);
+/* Pilotos_Nacionalidade: existe para listar pilotos de uma nacionalidade usando NOTICE. */
 CREATE OR REPLACE FUNCTION Pilotos_Nacionalidade(Nacionalidade TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -112,6 +115,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP PROCEDURE IF EXISTS Cidade_Chamada(TEXT);
+/* Cidade_Chamada: existe para consultar cidades com o nome informado e mostrar população/país via NOTICE. */
 CREATE OR REPLACE PROCEDURE Cidade_Chamada(Nome TEXT)
 AS $$
 DECLARE
@@ -149,6 +153,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP FUNCTION IF EXISTS Numero_Vitorias(TEXT, TEXT, INTEGER);
+/* Numero_Vitorias: existe para contar vitórias de um piloto, opcionalmente filtrando por ano. */
 CREATE OR REPLACE FUNCTION Numero_Vitorias(
     Nome TEXT,
     Sobrenome TEXT,
@@ -188,6 +193,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP FUNCTION IF EXISTS Pais_Continente();
+/* Pais_Continente: existe para retornar países com nome curto e seus continentes. */
 CREATE OR REPLACE FUNCTION Pais_Continente()
 RETURNS TABLE(Nome TEXT, Continente TEXT) AS $$
 DECLARE
@@ -221,9 +227,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Funções de dashboard do P4
+   Funções de dashboard do sistema
    ------------------------------------------------------------------------------------------------------------ */
-CREATE OR REPLACE FUNCTION p4_admin_counts()
+/* admin_counts: existe para alimentar cards do admin com totais de pilotos, escuderias e temporadas. */
+CREATE OR REPLACE FUNCTION admin_counts()
 RETURNS TABLE (
     total_pilotos BIGINT,
     total_escuderias BIGINT,
@@ -238,7 +245,8 @@ AS $$
         (SELECT COUNT(*) FROM seasons) AS total_temporadas;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_admin_latest_races()
+/* admin_latest_races: existe para listar corridas da temporada mais recente no dashboard admin. */
+CREATE OR REPLACE FUNCTION admin_latest_races()
 RETURNS TABLE (
     temporada INTEGER,
     corrida TEXT,
@@ -257,13 +265,14 @@ AS $$
         v.race_date,
         v.race_time,
         MAX(v.laps)::INTEGER AS voltas_registradas
-    FROM vw_p4_results_full v
+    FROM vw_results_full v
     WHERE v.season_year = (SELECT MAX(year) FROM seasons)
     GROUP BY v.season_year, v.race_id, v.race_name, v.circuit_name, v.race_date, v.race_time, v.round
     ORDER BY v.round;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_admin_latest_constructors_points()
+/* admin_latest_constructors_points: existe para ranquear escuderias por pontos na temporada mais recente. */
+CREATE OR REPLACE FUNCTION admin_latest_constructors_points()
 RETURNS TABLE (
     temporada INTEGER,
     escuderia TEXT,
@@ -276,13 +285,14 @@ AS $$
         v.season_year AS temporada,
         v.constructor_name::TEXT AS escuderia,
         SUM(v.points)::NUMERIC(12,2) AS total_pontos
-    FROM vw_p4_results_full v
+    FROM vw_results_full v
     WHERE v.season_year = (SELECT MAX(year) FROM seasons)
     GROUP BY v.season_year, v.constructor_id, v.constructor_name
     ORDER BY 3 DESC, 2;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_admin_latest_drivers_points()
+/* admin_latest_drivers_points: existe para ranquear pilotos por pontos na temporada mais recente. */
+CREATE OR REPLACE FUNCTION admin_latest_drivers_points()
 RETURNS TABLE (
     temporada INTEGER,
     piloto TEXT,
@@ -297,14 +307,15 @@ AS $$
         v.driver_full_name::TEXT AS piloto,
         MAX(lc.constructor_name)::TEXT AS escuderia_mais_recente,
         SUM(v.points)::NUMERIC(12,2) AS total_pontos
-    FROM vw_p4_results_full v
-    LEFT JOIN vw_p4_driver_latest_constructor lc ON lc.driver_id = v.driver_id
+    FROM vw_results_full v
+    LEFT JOIN vw_driver_latest_constructor lc ON lc.driver_id = v.driver_id
     WHERE v.season_year = (SELECT MAX(year) FROM seasons)
     GROUP BY v.season_year, v.driver_id, v.driver_full_name
     ORDER BY 4 DESC, 2;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_constructor_dashboard(p_constructor_id INTEGER)
+/* constructor_dashboard: existe para resumir vitórias, pilotos e anos de atividade de uma escuderia. */
+CREATE OR REPLACE FUNCTION constructor_dashboard(p_constructor_id INTEGER)
 RETURNS TABLE (
     escuderia TEXT,
     quantidade_vitorias BIGINT,
@@ -329,7 +340,9 @@ AS $$
     GROUP BY c.id, c.name;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_driver_dashboard(p_driver_id INTEGER)
+/* driver_dashboard: existe para mostrar dados consolidados de um piloto por ano e circuito.
+   Pilotos cadastrados por CSV podem ainda não ter results; nesses casos retorna o cadastro básico. */
+CREATE OR REPLACE FUNCTION driver_dashboard(p_driver_id INTEGER)
 RETURNS TABLE (
     piloto TEXT,
     escuderia_mais_recente TEXT,
@@ -346,32 +359,55 @@ STABLE
 AS $$
     WITH faixa AS (
         SELECT driver_id, MIN(season_year)::INTEGER AS primeiro_ano, MAX(season_year)::INTEGER AS ultimo_ano
-        FROM vw_p4_results_full
+        FROM vw_results_full
         WHERE driver_id = p_driver_id
         GROUP BY driver_id
     )
     SELECT
-        v.driver_full_name::TEXT AS piloto,
-        lc.constructor_name::TEXT AS escuderia_mais_recente,
+        (d.given_name || ' ' || d.family_name)::TEXT AS piloto,
+        COALESCE(lc.constructor_name, cadastro.constructor_name)::TEXT AS escuderia_mais_recente,
         f.primeiro_ano,
         f.ultimo_ano,
         v.season_year AS ano,
         v.circuit_name::TEXT AS circuito,
-        SUM(v.points)::NUMERIC(12,2) AS pontos,
-        COUNT(*) FILTER (WHERE v.position_order = 1) AS vitorias,
-        COUNT(*) AS total_corridas
-    FROM vw_p4_results_full v
-    JOIN faixa f ON f.driver_id = v.driver_id
-    LEFT JOIN vw_p4_driver_latest_constructor lc ON lc.driver_id = v.driver_id
-    WHERE v.driver_id = p_driver_id
-    GROUP BY v.driver_id, v.driver_full_name, lc.constructor_name, f.primeiro_ano, f.ultimo_ano, v.season_year, v.circuit_id, v.circuit_name
-    ORDER BY v.season_year, v.circuit_name;
+        CASE
+            WHEN COUNT(v.result_id) = 0 THEN NULL
+            ELSE COALESCE(SUM(v.points), 0)::NUMERIC(12,2)
+        END AS pontos,
+        COUNT(v.result_id) FILTER (WHERE v.position_order = 1) AS vitorias,
+        COUNT(v.result_id) AS total_corridas
+    FROM drivers d
+    LEFT JOIN vw_results_full v ON v.driver_id = d.id
+    LEFT JOIN faixa f ON f.driver_id = d.id
+    LEFT JOIN vw_driver_latest_constructor lc ON lc.driver_id = d.id
+    LEFT JOIN LATERAL (
+        SELECT c.name AS constructor_name
+        FROM constructor_drivers cd
+        JOIN constructors c ON c.id = cd.constructor_id
+        WHERE cd.driver_id = d.id
+        ORDER BY cd.registered_at DESC, c.name
+        LIMIT 1
+    ) cadastro ON true
+    WHERE d.id = p_driver_id
+    GROUP BY
+        d.id,
+        d.given_name,
+        d.family_name,
+        lc.constructor_name,
+        cadastro.constructor_name,
+        f.primeiro_ano,
+        f.ultimo_ano,
+        v.season_year,
+        v.circuit_id,
+        v.circuit_name
+    ORDER BY v.season_year NULLS LAST, v.circuit_name NULLS LAST;
 $$;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Relatórios do P4
+   Relatórios do sistema
    ------------------------------------------------------------------------------------------------------------ */
-CREATE OR REPLACE FUNCTION p4_report_admin_status_count()
+/* report_admin_status_count: existe para contar resultados por status de chegada. */
+CREATE OR REPLACE FUNCTION report_admin_status_count()
 RETURNS TABLE (status TEXT, quantidade BIGINT)
 LANGUAGE sql
 STABLE
@@ -383,7 +419,8 @@ AS $$
     ORDER BY COUNT(*) DESC, st.status;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_admin_airports_near_city(p_nome_cidade TEXT)
+/* report_admin_airports_near_city: existe para buscar aeroportos médios/grandes a até 100 km de cidades brasileiras pesquisadas. */
+CREATE OR REPLACE FUNCTION report_admin_airports_near_city(p_nome_cidade TEXT)
 RETURNS TABLE (
     cidade_pesquisada TEXT,
     codigo_iata TEXT,
@@ -397,7 +434,7 @@ STABLE
 AS $$
     WITH cidades_pesquisadas AS (
         SELECT id, name, latitude, longitude
-        FROM vw_p4_cidades_brasileiras_todas
+        FROM vw_cidades_brasileiras_todas
         WHERE name ILIKE p_nome_cidade
     ), candidatos AS (
         SELECT
@@ -411,7 +448,7 @@ AS $$
                 ll_to_earth(a.latitude_deg::FLOAT8, a.longitude_deg::FLOAT8)
             ) AS distancia_metros
         FROM cidades_pesquisadas cp
-        JOIN vw_p4_aeroportos_brasileiros_medium_large a
+        JOIN vw_aeroportos_brasileiros_medium_large a
           ON earth_box(ll_to_earth(cp.latitude::FLOAT8, cp.longitude::FLOAT8), 100000)
              @> ll_to_earth(a.latitude_deg::FLOAT8, a.longitude_deg::FLOAT8)
     )
@@ -427,7 +464,8 @@ AS $$
     ORDER BY c.cidade_pesquisada, ROUND((c.distancia_metros / 1000.0)::NUMERIC, 3), c.aeroporto;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_admin_constructor_driver_count()
+/* report_admin_constructor_driver_count: existe para contar pilotos que já correram por cada escuderia. */
+CREATE OR REPLACE FUNCTION report_admin_constructor_driver_count()
 RETURNS TABLE (escuderia TEXT, quantidade_pilotos BIGINT)
 LANGUAGE sql
 STABLE
@@ -436,12 +474,13 @@ AS $$
         c.name::TEXT AS escuderia,
         COUNT(DISTINCT h.driver_id) AS quantidade_pilotos
     FROM constructors c
-    LEFT JOIN vw_p4_constructor_driver_history h ON h.constructor_id = c.id
+    LEFT JOIN vw_constructor_driver_history h ON h.constructor_id = c.id
     GROUP BY c.id, c.name
     ORDER BY c.name;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_admin_races_total()
+/* report_admin_races_total: existe para retornar o total de corridas cadastradas. */
+CREATE OR REPLACE FUNCTION report_admin_races_total()
 RETURNS TABLE (quantidade_corridas BIGINT)
 LANGUAGE sql
 STABLE
@@ -449,7 +488,8 @@ AS $$
     SELECT COUNT(*) FROM races;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_admin_races_by_circuit()
+/* report_admin_races_by_circuit: existe para resumir quantidade de corridas e voltas por circuito. */
+CREATE OR REPLACE FUNCTION report_admin_races_by_circuit()
 RETURNS TABLE (
     circuito TEXT,
     quantidade_corridas BIGINT,
@@ -481,7 +521,8 @@ AS $$
     ORDER BY vpc.circuito;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_admin_race_details()
+/* report_admin_race_details: existe para detalhar corridas por circuito, ano, voltas e quantidade de pilotos. */
+CREATE OR REPLACE FUNCTION report_admin_race_details()
 RETURNS TABLE (
     circuito TEXT,
     corrida TEXT,
@@ -506,7 +547,8 @@ AS $$
     ORDER BY cir.name, s.year, ra.race_name;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_constructor_driver_wins(p_constructor_id INTEGER)
+/* report_constructor_driver_wins: existe para escuderia ver vitórias por piloto. */
+CREATE OR REPLACE FUNCTION report_constructor_driver_wins(p_constructor_id INTEGER)
 RETURNS TABLE (piloto TEXT, quantidade_vitorias BIGINT)
 LANGUAGE sql
 STABLE
@@ -514,13 +556,14 @@ AS $$
     SELECT
         v.driver_full_name::TEXT AS piloto,
         COUNT(*) FILTER (WHERE v.position_order = 1) AS quantidade_vitorias
-    FROM vw_p4_results_full v
+    FROM vw_results_full v
     WHERE v.constructor_id = p_constructor_id
     GROUP BY v.driver_id, v.driver_full_name
     ORDER BY COUNT(*) FILTER (WHERE v.position_order = 1) DESC, v.driver_full_name;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_constructor_status_count(p_constructor_id INTEGER)
+/* report_constructor_status_count: existe para escuderia ver contagem de status em seus resultados. */
+CREATE OR REPLACE FUNCTION report_constructor_status_count(p_constructor_id INTEGER)
 RETURNS TABLE (status TEXT, quantidade BIGINT)
 LANGUAGE sql
 STABLE
@@ -528,7 +571,7 @@ AS $$
     SELECT
         v.status::TEXT AS status,
         COUNT(*) AS quantidade
-    FROM vw_p4_results_full v
+    FROM vw_results_full v
     WHERE v.constructor_id = p_constructor_id
     GROUP BY v.status
     ORDER BY COUNT(*) DESC, v.status;
@@ -536,9 +579,10 @@ $$;
 
 /* DROP necessario: as colunas de retorno mudaram (total por ano + pontos por corrida),
    e o PostgreSQL nao permite CREATE OR REPLACE quando o tipo de retorno e alterado. */
-DROP FUNCTION IF EXISTS p4_report_driver_points_by_year_race(INTEGER);
+DROP FUNCTION IF EXISTS report_driver_points_by_year_race(INTEGER);
 
-CREATE OR REPLACE FUNCTION p4_report_driver_points_by_year_race(
+/* report_driver_points_by_year_race: existe para piloto ver pontos por ano e corridas em que pontuou. */
+CREATE OR REPLACE FUNCTION report_driver_points_by_year_race(
     p_driver_id INTEGER
 )
 RETURNS TABLE (
@@ -568,7 +612,7 @@ AS $$
             v.season_year AS ano_participacao,
             COALESCE(SUM(v.points), 0)::NUMERIC(12,2)
                 AS total_ano
-        FROM vw_p4_results_full v
+        FROM vw_results_full v
         WHERE v.driver_id = p_driver_id
         GROUP BY v.season_year
     ),
@@ -580,7 +624,7 @@ AS $$
             v.race_name::TEXT AS nome_corrida,
             v.circuit_name::TEXT AS nome_circuito,
             SUM(v.points)::NUMERIC(12,2) AS pontos_obtidos
-        FROM vw_p4_results_full v
+        FROM vw_results_full v
         WHERE v.driver_id = p_driver_id
           AND v.points > 0
         GROUP BY
@@ -605,7 +649,8 @@ AS $$
         c.nome_corrida;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_report_driver_status_count(p_driver_id INTEGER)
+/* report_driver_status_count: existe para piloto ver contagem de status em seus resultados. */
+CREATE OR REPLACE FUNCTION report_driver_status_count(p_driver_id INTEGER)
 RETURNS TABLE (status TEXT, quantidade BIGINT)
 LANGUAGE sql
 STABLE
@@ -613,16 +658,17 @@ AS $$
     SELECT
         v.status::TEXT AS status,
         COUNT(*) AS quantidade
-    FROM vw_p4_results_full v
+    FROM vw_results_full v
     WHERE v.driver_id = p_driver_id
     GROUP BY v.status
     ORDER BY COUNT(*) DESC, v.status;
 $$;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Ações do P4: cadastros e consulta por sobrenome
+   Ações do sistema: cadastros e consulta por sobrenome
    ------------------------------------------------------------------------------------------------------------ */
-CREATE OR REPLACE FUNCTION p4_create_constructor(
+/* create_constructor: existe para cadastrar escuderia validando país obrigatório; retorna o id criado. */
+CREATE OR REPLACE FUNCTION create_constructor(
     p_constructor_ref TEXT,
     p_name TEXT,
     p_country_id INTEGER,
@@ -646,7 +692,8 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_create_driver(
+/* create_driver: existe para cadastrar piloto com validações de referência, nome, nascimento e país; retorna o id criado. */
+CREATE OR REPLACE FUNCTION create_driver(
     p_driver_ref TEXT,
     p_given_name TEXT,
     p_family_name TEXT,
@@ -699,7 +746,8 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_create_driver_for_constructor(
+/* create_driver_for_constructor: existe para escuderia cadastrar piloto e vincular em constructor_drivers. */
+CREATE OR REPLACE FUNCTION create_driver_for_constructor(
     p_constructor_id INTEGER,
     p_driver_ref TEXT,
     p_given_name TEXT,
@@ -713,7 +761,7 @@ AS $$
 DECLARE
     v_driver_id INTEGER;
 BEGIN
-    v_driver_id := p4_create_driver(p_driver_ref, p_given_name, p_family_name, p_date_of_birth, p_country_id);
+    v_driver_id := create_driver(p_driver_ref, p_given_name, p_family_name, p_date_of_birth, p_country_id);
 
     INSERT INTO constructor_drivers(constructor_id, driver_id)
     VALUES (p_constructor_id, v_driver_id)
@@ -723,7 +771,8 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION p4_constructor_find_driver_by_family_name(
+/* constructor_find_driver_by_family_name: existe para escuderia buscar seus pilotos históricos por sobrenome. */
+CREATE OR REPLACE FUNCTION constructor_find_driver_by_family_name(
     p_constructor_id INTEGER,
     p_family_name TEXT
 )

@@ -90,5 +90,5 @@ driver_ref,given_name,family_name,date_of_birth,country_id
 novo_piloto,Novo,Piloto,2000-01-01,30
 ```
 
-O backend valida as colunas, chama `p4_create_driver_for_constructor` por linha,
+O backend valida as colunas, chama `create_driver_for_constructor` por linha,
 retorna quais pilotos foram inseridos e quais falharam, e apaga o arquivo temporário.

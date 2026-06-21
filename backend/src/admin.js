@@ -11,10 +11,10 @@ router.use(requireAuth, requireRole("Admin"));
 router.get("/dashboard", async (req, res) => {
   try {
     const [counts, races, constructors, drivers] = await Promise.all([
-      pool.query("SELECT * FROM p4_admin_counts()"),
-      pool.query("SELECT * FROM p4_admin_latest_races()"),
-      pool.query("SELECT * FROM p4_admin_latest_constructors_points()"),
-      pool.query("SELECT * FROM p4_admin_latest_drivers_points()")
+      pool.query("SELECT * FROM admin_counts()"),
+      pool.query("SELECT * FROM admin_latest_races()"),
+      pool.query("SELECT * FROM admin_latest_constructors_points()"),
+      pool.query("SELECT * FROM admin_latest_drivers_points()")
     ]);
 
     return res.json({
@@ -32,8 +32,24 @@ router.get("/dashboard", async (req, res) => {
   }
 });
 
+// GET /api/admin/countries
+router.get("/countries", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, code, name, nationality
+      FROM countries
+      ORDER BY name
+    `);
+
+    return res.json({ success: true, data: result.rows });
+  } catch (err) {
+    const { status, message } = mapDbError(err);
+    return res.status(status).json({ success: false, message });
+  }
+});
+
 // POST /api/admin/constructors
-// A trigger tr_p4_sync_constructor_user cria o usuario da escuderia automaticamente.
+// A trigger tr_sync_constructor_user cria o usuario da escuderia automaticamente.
 router.post("/constructors", async (req, res) => {
   const { constructorRef, name, countryId, wikipediaUrl } = req.body;
 
@@ -43,7 +59,7 @@ router.post("/constructors", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT p4_create_constructor($1, $2, $3, $4) AS id",
+      "SELECT create_constructor($1, $2, $3, $4) AS id",
       [constructorRef, name, countryId, wikipediaUrl || null]
     );
     return res.status(201).json({ success: true, data: { id: result.rows[0].id } });
@@ -54,7 +70,7 @@ router.post("/constructors", async (req, res) => {
 });
 
 // POST /api/admin/drivers
-// A trigger tr_p4_sync_driver_user cria o usuario do piloto automaticamente.
+// A trigger tr_sync_driver_user cria o usuario do piloto automaticamente.
 router.post("/drivers", async (req, res) => {
   const { driverRef, givenName, familyName, dateOfBirth, countryId } = req.body;
 
@@ -68,7 +84,7 @@ router.post("/drivers", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT p4_create_driver($1, $2, $3, $4, $5) AS id",
+      "SELECT create_driver($1, $2, $3, $4, $5) AS id",
       [driverRef, givenName, familyName, dateOfBirth, countryId]
     );
     return res.status(201).json({ success: true, data: { id: result.rows[0].id } });
@@ -81,7 +97,7 @@ router.post("/drivers", async (req, res) => {
 // GET /api/admin/reports/status  (Relatorio 1)
 router.get("/reports/status", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM p4_report_admin_status_count()");
+    const result = await pool.query("SELECT * FROM report_admin_status_count()");
     return res.json({ success: true, data: result.rows });
   } catch (err) {
     const { status, message } = mapDbError(err);
@@ -99,7 +115,7 @@ router.get("/reports/airports", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT * FROM p4_report_admin_airports_near_city($1)",
+      "SELECT * FROM report_admin_airports_near_city($1)",
       [city]
     );
 
@@ -119,10 +135,10 @@ router.get("/reports/airports", async (req, res) => {
 router.get("/reports/report-3", async (req, res) => {
   try {
     const [constructors, racesTotal, byCircuit, raceDetails] = await Promise.all([
-      pool.query("SELECT * FROM p4_report_admin_constructor_driver_count()"),
-      pool.query("SELECT * FROM p4_report_admin_races_total()"),
-      pool.query("SELECT * FROM p4_report_admin_races_by_circuit()"),
-      pool.query("SELECT * FROM p4_report_admin_race_details()")
+      pool.query("SELECT * FROM report_admin_constructor_driver_count()"),
+      pool.query("SELECT * FROM report_admin_races_total()"),
+      pool.query("SELECT * FROM report_admin_races_by_circuit()"),
+      pool.query("SELECT * FROM report_admin_race_details()")
     ]);
 
     return res.json({

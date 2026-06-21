@@ -1,8 +1,7 @@
 /* ============================================================================================================
-   07_triggers.sql - Triggers baseadas no modelo do gabarito T3
+   07_triggers.sql - Triggers de sincronização de usuários
 
-   T3 usa CREATE FUNCTION ... RETURNS TRIGGER e CREATE TRIGGER para automatizar regras.
-   Aqui aplicamos esse modelo ao requisito do P4:
+   Objetivo:
    - ao inserir/atualizar DRIVERS, sincronizar USERS;
    - ao inserir/atualizar CONSTRUCTORS, sincronizar USERS;
    - se o login gerado já pertencer a outro usuário, cancelar operação com RAISE EXCEPTION.
@@ -12,10 +11,11 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-DROP TRIGGER IF EXISTS tr_p4_sync_driver_user ON drivers;
-DROP FUNCTION IF EXISTS p4_sync_driver_user();
+DROP TRIGGER IF EXISTS tr_sync_driver_user ON drivers;
+DROP FUNCTION IF EXISTS sync_driver_user();
 
-CREATE OR REPLACE FUNCTION p4_sync_driver_user()
+-- sync_driver_user: aciona após inserir piloto ou alterar driver_ref; cria/atualiza usuário Piloto e bloqueia login duplicado.
+CREATE OR REPLACE FUNCTION sync_driver_user()
 RETURNS TRIGGER AS $$
 DECLARE
     v_login TEXT;
@@ -53,15 +53,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tr_p4_sync_driver_user
+/* tr_sync_driver_user: ativa AFTER INSERT OR UPDATE OF driver_ref em drivers, para manter users sincronizada automaticamente. */
+CREATE TRIGGER tr_sync_driver_user
 AFTER INSERT OR UPDATE OF driver_ref ON drivers
 FOR EACH ROW
-EXECUTE FUNCTION p4_sync_driver_user();
+EXECUTE FUNCTION sync_driver_user();
 
-DROP TRIGGER IF EXISTS tr_p4_sync_constructor_user ON constructors;
-DROP FUNCTION IF EXISTS p4_sync_constructor_user();
+DROP TRIGGER IF EXISTS tr_sync_constructor_user ON constructors;
+DROP FUNCTION IF EXISTS sync_constructor_user();
 
-CREATE OR REPLACE FUNCTION p4_sync_constructor_user()
+-- sync_constructor_user: aciona após inserir escuderia ou alterar constructor_ref; cria/atualiza usuário Escuderia e bloqueia login duplicado.
+CREATE OR REPLACE FUNCTION sync_constructor_user()
 RETURNS TRIGGER AS $$
 DECLARE
     v_login TEXT;
@@ -99,9 +101,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tr_p4_sync_constructor_user
+/* tr_sync_constructor_user: ativa AFTER INSERT OR UPDATE OF constructor_ref em constructors, para manter users sincronizada automaticamente. */
+CREATE TRIGGER tr_sync_constructor_user
 AFTER INSERT OR UPDATE OF constructor_ref ON constructors
 FOR EACH ROW
-EXECUTE FUNCTION p4_sync_constructor_user();
+EXECUTE FUNCTION sync_constructor_user();
 
 COMMIT;

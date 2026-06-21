@@ -8,7 +8,7 @@ Este pacote foi reorganizado para seguir a separação pedida no projeto final:
 
 ## T1
 
-O arquivo `03_t1_limpeza_normalizacao.sql` segue a ideia do T1:
+O arquivo `03_deduplicacao_metricas.sql` segue a ideia do T1:
 
 - substituir nacionalidade textual de pilotos e construtores por `country_id`;
 - adicionar `nationality` em `countries`;

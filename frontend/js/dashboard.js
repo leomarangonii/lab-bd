@@ -93,11 +93,24 @@ async function loadAdminDashboard() {
     ${tabelaPilotos}
   `;
 
-  renderAdminActions();
+  await renderAdminActions();
 }
 
-function renderAdminActions() {
+async function renderAdminActions() {
   const actions = document.getElementById("available-actions");
+  showLoading(actions);
+
+  let countries = [];
+  try {
+    const response = await apiRequest("/admin/countries");
+    countries = response.data || [];
+  } catch (err) {
+    showError(actions, `Não foi possível carregar os países: ${err.message}`);
+    return;
+  }
+
+  const countryOptions = renderCountryOptions(countries);
+
   actions.innerHTML = `
     <div class="flex flex-wrap gap-3">
       <button id="btn-form-constructor" class="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700">Cadastrar Escuderia</button>
@@ -110,7 +123,7 @@ function renderAdminActions() {
       <form id="constructor-form" class="grid gap-4 sm:grid-cols-2">
         ${field("c-ref", "Referência", "text", true)}
         ${field("c-name", "Nome", "text", true)}
-        ${field("c-country", "Identificador do país", "number", true, 'min="1"')}
+        ${selectField("c-country", "País", true, countryOptions)}
         ${field("c-wiki", "URL da Wikipédia", "url", false)}
         <div class="sm:col-span-2">
           <button type="submit" class="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:opacity-60">Salvar Escuderia</button>
@@ -126,7 +139,7 @@ function renderAdminActions() {
         ${field("d-given", "Nome", "text", true)}
         ${field("d-family", "Sobrenome", "text", true)}
         ${field("d-birth", "Data de nascimento", "date", true, `max="${new Date().toISOString().slice(0, 10)}"`)}
-        ${field("d-country", "Identificador do país", "number", true, 'min="1"')}
+        ${selectField("d-country", "País", true, countryOptions)}
         <div class="sm:col-span-2">
           <button type="submit" class="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:opacity-60">Salvar Piloto</button>
         </div>
@@ -142,6 +155,15 @@ function renderAdminActions() {
   setupDriverForm();
 }
 
+function renderCountryOptions(countries) {
+  const options = countries.map((country) => {
+    const code = country.code ? ` (${country.code})` : "";
+    return `<option value="${Number(country.id)}">${escapeHtml(`${country.name}${code}`)}</option>`;
+  });
+
+  return `<option value="">Selecione um país</option>${options.join("")}`;
+}
+
 // Campo de formulario com label associado.
 function field(id, label, type, required, extra = "") {
   return `
@@ -149,6 +171,18 @@ function field(id, label, type, required, extra = "") {
       <label for="${id}" class="block text-sm font-semibold text-gray-700">${escapeHtml(label)}</label>
       <input id="${id}" name="${id}" type="${type}" ${required ? "required" : ""} ${extra}
         class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200">
+    </div>
+  `;
+}
+
+function selectField(id, label, required, optionsHtml) {
+  return `
+    <div>
+      <label for="${id}" class="block text-sm font-semibold text-gray-700">${escapeHtml(label)}</label>
+      <select id="${id}" name="${id}" ${required ? "required" : ""}
+        class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200">
+        ${optionsHtml}
+      </select>
     </div>
   `;
 }
@@ -176,7 +210,7 @@ function setupConstructorForm() {
     };
 
     if (!Number.isInteger(payload.countryId) || payload.countryId <= 0) {
-      showError(msg, "O identificador do país deve ser um número positivo.");
+      showError(msg, "Selecione um país.");
       return;
     }
 
@@ -222,7 +256,7 @@ function setupDriverForm() {
     }
 
     if (!Number.isInteger(payload.countryId) || payload.countryId <= 0) {
-      showError(msg, "O identificador do país deve ser um número positivo.");
+      showError(msg, "Selecione um país.");
       return;
     }
 
@@ -408,6 +442,7 @@ async function loadDriverDashboard() {
   }
 
   const base = linhas[0];
+  const desempenho = linhas.filter((linha) => linha.ano !== null && linha.ano !== undefined);
 
   const cards = grid([
     createCard("Piloto", base.piloto),
@@ -416,18 +451,20 @@ async function loadDriverDashboard() {
     createCard("Último ano", formatYear(base.ultimo_ano))
   ]);
 
-  const tabela = createTable(
-    [
-      { label: "Ano", key: "ano", format: formatYear },
-      { label: "Circuito", key: "circuito" },
-      { label: "Pontos", key: "pontos", format: formatNumber },
-      { label: "Vitórias", key: "vitorias", format: formatNumber },
-      { label: "Total de corridas", key: "total_corridas", format: formatNumber }
-    ],
-    linhas
-  );
+  const desempenhoHtml = desempenho.length > 0
+    ? createTable(
+        [
+          { label: "Ano", key: "ano", format: formatYear },
+          { label: "Circuito", key: "circuito" },
+          { label: "Pontos", key: "pontos", format: formatNumber },
+          { label: "Vitórias", key: "vitorias", format: formatNumber },
+          { label: "Total de corridas", key: "total_corridas", format: formatNumber }
+        ],
+        desempenho
+      )
+    : `<p class="rounded-lg border border-gray-200 bg-white p-4 text-gray-500">Nenhum desempenho registrado para este piloto.</p>`;
 
-  content.innerHTML = `${cards}${sectionTitle("Desempenho por ano e circuito")}${tabela}`;
+  content.innerHTML = `${cards}${sectionTitle("Desempenho por ano e circuito")}${desempenhoHtml}`;
   document.getElementById("available-actions").innerHTML = linkRelatorios();
 }
 

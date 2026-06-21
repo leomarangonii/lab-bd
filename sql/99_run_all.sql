@@ -4,7 +4,7 @@
    Executa os scripts na ordem correta.
 
    Uso recomendado:
-       cd p4_bd_schema_normalizado_csv/sql
+       cd bd_schema_normalizado_csv/sql
        psql -d f1db -f 99_run_all.sql
    ============================================================================================================ */
 
@@ -16,8 +16,8 @@
 \echo '02 - Carregando dados CSV/TSV...'
 \ir 02_carga_csv.sql
 
-\echo '03 - Aplicando métricas e deduplicação do T1...'
-\ir 03_t1_deduplicacao_metricas.sql
+\echo '03 - Aplicando métricas e deduplicação...'
+\ir 03_deduplicacao_metricas.sql
 
 \echo '04 - Criando views...'
 \ir 04_views.sql
@@ -37,4 +37,4 @@
 \echo '09 - Rodando testes rápidos...'
 \ir 09_testes_rapidos.sql
 
-\echo 'Base do P4 montada com sucesso.'
+\echo 'Base do sistema montada com sucesso.'

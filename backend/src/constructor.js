@@ -67,7 +67,7 @@ router.get("/dashboard", async (req, res) => {
   const constructorId = req.session.user.idOriginal;
 
   try {
-    const result = await pool.query("SELECT * FROM p4_constructor_dashboard($1)", [constructorId]);
+    const result = await pool.query("SELECT * FROM constructor_dashboard($1)", [constructorId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Escuderia não encontrada." });
@@ -92,7 +92,7 @@ router.get("/drivers/search", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT * FROM p4_constructor_find_driver_by_family_name($1, $2)",
+      "SELECT * FROM constructor_find_driver_by_family_name($1, $2)",
       [constructorId, familyName]
     );
 
@@ -150,7 +150,7 @@ router.post("/drivers/upload", upload.single("file"), async (req, res) => {
         }
 
         const result = await pool.query(
-          "SELECT p4_create_driver_for_constructor($1, $2, $3, $4, $5, $6) AS id",
+          "SELECT create_driver_for_constructor($1, $2, $3, $4, $5, $6) AS id",
           [
             constructorId,
             driverRef,
@@ -188,7 +188,7 @@ router.get("/reports/wins", async (req, res) => {
   const constructorId = req.session.user.idOriginal;
 
   try {
-    const result = await pool.query("SELECT * FROM p4_report_constructor_driver_wins($1)", [constructorId]);
+    const result = await pool.query("SELECT * FROM report_constructor_driver_wins($1)", [constructorId]);
     return res.json({ success: true, data: result.rows });
   } catch (err) {
     const { status, message } = mapDbError(err);
@@ -201,7 +201,7 @@ router.get("/reports/status", async (req, res) => {
   const constructorId = req.session.user.idOriginal;
 
   try {
-    const result = await pool.query("SELECT * FROM p4_report_constructor_status_count($1)", [constructorId]);
+    const result = await pool.query("SELECT * FROM report_constructor_status_count($1)", [constructorId]);
     return res.json({ success: true, data: result.rows });
   } catch (err) {
     const { status, message } = mapDbError(err);

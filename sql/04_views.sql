@@ -1,9 +1,8 @@
 /* ============================================================================================================
-   04_views.sql - Views baseadas nos gabaritos T1/T4 + views auxiliares do P4
+   04_views.sql - Views de relatórios, correções geográficas e dashboards
 
-   T1: consultas sobre pontos, poles e países que sediam corridas.
-   T4: views/materialized views de aeroportos, cidades brasileiras e circuitos.
-   P4: views auxiliares para dashboards e relatórios.
+   Consultas sobre pontos, poles, países que sediam corridas, aeroportos, cidades brasileiras, circuitos,
+   dashboards e relatórios.
    ============================================================================================================ */
 
 BEGIN;
@@ -12,9 +11,10 @@ CREATE EXTENSION IF NOT EXISTS cube;
 CREATE EXTENSION IF NOT EXISTS earthdistance;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Views inspiradas nas consultas do gabarito T1
+   Views de consultas de Fórmula 1
    ------------------------------------------------------------------------------------------------------------ */
-CREATE OR REPLACE VIEW vw_t1_pontos_pilotos_ano AS
+-- View vw_pontos_pilotos_ano: existe para consultar pontos finais por piloto e ano; pega a última rodada de cada temporada.
+CREATE OR REPLACE VIEW vw_pontos_pilotos_ano AS
 SELECT
     se.year AS ano,
     d.given_name,
@@ -31,7 +31,8 @@ JOIN (
     GROUP BY season_id
 ) u ON u.season_id = s.season_id AND u.ultima_rodada = s.round;
 
-CREATE OR REPLACE VIEW vw_t1_poles_por_piloto AS
+-- View vw_poles_por_piloto: existe para contar poles por piloto; considera grid = 1 nos resultados.
+CREATE OR REPLACE VIEW vw_poles_por_piloto AS
 SELECT
     d.id AS driver_id,
     (d.given_name || ' ' || d.family_name) AS piloto,
@@ -41,7 +42,8 @@ JOIN results r ON d.id = r.driver_id
 WHERE r.grid = 1
 GROUP BY d.id, d.given_name, d.family_name;
 
-CREATE OR REPLACE VIEW vw_t1_paises_sede_corridas_cidades_aeroportos AS
+-- View vw_paises_sede_corridas_cidades_aeroportos: existe para comparar países com circuitos, contando cidades e aeroportos cadastrados.
+CREATE OR REPLACE VIEW vw_paises_sede_corridas_cidades_aeroportos AS
 SELECT
     conta_cidades.nome,
     conta_cidades.nc AS quantidade_cidades,
@@ -71,9 +73,10 @@ LEFT JOIN (
 ) conta_aeroportos ON conta_cidades.nome = conta_aeroportos.nome;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Views do gabarito T4
+   Views de aeroportos, cidades e circuitos
    ------------------------------------------------------------------------------------------------------------ */
 DROP MATERIALIZED VIEW IF EXISTS Aeroportos_Brasileiros CASCADE;
+-- Materialized view Aeroportos_Brasileiros: existe para acelerar consultas repetidas de aeroportos brasileiros com cidade, país e continente.
 CREATE MATERIALIZED VIEW Aeroportos_Brasileiros AS
 SELECT
     a.name AS Aeroporto,
@@ -90,6 +93,7 @@ JOIN continents co ON p.continent_id = co.id
 WHERE p.name = 'Brazil';
 
 DROP VIEW IF EXISTS Aeroportos_sem_cidades CASCADE;
+-- View Aeroportos_sem_cidades: existe para listar aeroportos sem cidade vinculada, mas com coordenadas úteis para correção.
 CREATE OR REPLACE VIEW Aeroportos_sem_cidades AS
 SELECT
     a.id,
@@ -102,6 +106,7 @@ WHERE a.city_id IS NULL
   AND a.longitude_deg IS NOT NULL;
 
 DROP VIEW IF EXISTS Cidades_brasileiras CASCADE;
+-- View Cidades_brasileiras: existe para listar cidades brasileiras grandes com coordenadas; usada na correção de aeroportos próximos.
 CREATE OR REPLACE VIEW Cidades_brasileiras AS
 SELECT
     ci.id,
@@ -117,6 +122,7 @@ WHERE p.name = 'Brazil'
   AND ci.longitude IS NOT NULL;
 
 DROP VIEW IF EXISTS Circuitos_completa CASCADE;
+-- View Circuitos_completa: existe para exibir circuitos com cidade, país e continente já unidos.
 CREATE OR REPLACE VIEW Circuitos_completa AS
 SELECT
     cir.name AS Circuito,
@@ -132,6 +138,7 @@ LEFT JOIN countries p ON c.country_id = p.id
 LEFT JOIN continents co ON p.continent_id = co.id;
 
 DROP VIEW IF EXISTS Problemas_aeroportos CASCADE;
+-- View Problemas_aeroportos: existe para encontrar aeroportos sem cidade que ficam próximos de cidades brasileiras grandes.
 CREATE OR REPLACE VIEW Problemas_aeroportos AS
 WITH distancias AS (
     SELECT
@@ -159,6 +166,7 @@ SELECT id, Aeroporto, Latitude, Longitude, Cidade, Populacao, Distancia
 FROM distancias;
 
 DROP VIEW IF EXISTS Correcao_aeroportos CASCADE;
+-- View Correcao_aeroportos: existe para listar os aeroportos candidatos a correção de cidade.
 CREATE OR REPLACE VIEW Correcao_aeroportos AS
 SELECT DISTINCT
     a.id,
@@ -170,9 +178,10 @@ FROM airports a
 JOIN Problemas_aeroportos p ON p.id = a.id;
 
 /* ------------------------------------------------------------------------------------------------------------
-   Views auxiliares do P4
+   Views auxiliares do sistema
    ------------------------------------------------------------------------------------------------------------ */
-CREATE OR REPLACE VIEW vw_p4_results_full AS
+-- View vw_results_full: existe para centralizar joins de resultados, corridas, pilotos, escuderias, países e status.
+CREATE OR REPLACE VIEW vw_results_full AS
 SELECT
     r.id AS result_id,
     r.race_id,
@@ -215,7 +224,8 @@ LEFT JOIN countries dc ON dc.id = d.country_id
 LEFT JOIN countries cc ON cc.id = con.country_id
 LEFT JOIN status st ON st.id = r.status_id;
 
-CREATE OR REPLACE VIEW vw_p4_constructor_driver_history AS
+-- View vw_constructor_driver_history: existe para descobrir quais pilotos já correram por cada escuderia usando results.
+CREATE OR REPLACE VIEW vw_constructor_driver_history AS
 SELECT DISTINCT
     constructor_id,
     constructor_ref,
@@ -225,9 +235,10 @@ SELECT DISTINCT
     driver_full_name,
     given_name,
     family_name
-FROM vw_p4_results_full;
+FROM vw_results_full;
 
-CREATE OR REPLACE VIEW vw_p4_driver_latest_constructor AS
+-- View vw_driver_latest_constructor: existe para obter a escuderia mais recente de cada piloto.
+CREATE OR REPLACE VIEW vw_driver_latest_constructor AS
 SELECT DISTINCT ON (driver_id)
     driver_id,
     driver_full_name,
@@ -236,12 +247,13 @@ SELECT DISTINCT ON (driver_id)
     season_year,
     race_date,
     round
-FROM vw_p4_results_full
+FROM vw_results_full
 ORDER BY driver_id, season_year DESC, race_date DESC NULLS LAST, round DESC NULLS LAST;
 
-/* Diferente da view Cidades_brasileiras do T4, esta não filtra população >= 100000.
-   Ela é usada no Relatório 2 do P4, que pede todas as cidades brasileiras com o nome pesquisado. */
-CREATE OR REPLACE VIEW vw_p4_cidades_brasileiras_todas AS
+/* Diferente da view Cidades_brasileiras, esta não filtra população >= 100000.
+   Ela é usada no relatório de aeroportos, que pede todas as cidades brasileiras com o nome pesquisado. */
+-- View vw_cidades_brasileiras_todas: existe para pesquisar cidades brasileiras por nome, sem descartar cidades menores.
+CREATE OR REPLACE VIEW vw_cidades_brasileiras_todas AS
 SELECT
     ci.id,
     ci.name,
@@ -255,7 +267,8 @@ WHERE p.name = 'Brazil'
   AND ci.latitude IS NOT NULL
   AND ci.longitude IS NOT NULL;
 
-CREATE OR REPLACE VIEW vw_p4_aeroportos_brasileiros_medium_large AS
+-- View vw_aeroportos_brasileiros_medium_large: existe para restringir o relatório a aeroportos brasileiros médios/grandes com coordenadas.
+CREATE OR REPLACE VIEW vw_aeroportos_brasileiros_medium_large AS
 SELECT
     a.id,
     a.iata_code,

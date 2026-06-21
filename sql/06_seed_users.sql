@@ -1,7 +1,7 @@
 /* ============================================================================================================
    06_seed_users.sql
    ------------------------------------------------------------------------------------------------------------
-   Faz SOMENTE a carga dos usuários iniciais do P4:
+   Faz somente a carga dos usuários iniciais do sistema:
    - admin/admin;
    - um usuário para cada escuderia: <constructor_ref>_c / <constructor_ref>;
    - um usuário para cada piloto: <driver_ref>_d / <driver_ref>.
@@ -13,6 +13,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Usuário admin: cria/atualiza o login administrativo padrão.
 INSERT INTO users (login, password, tipo, id_original)
 VALUES ('admin', crypt('admin', gen_salt('bf')), 'Admin', NULL)
 ON CONFLICT (login) DO UPDATE
@@ -21,6 +22,7 @@ SET password = EXCLUDED.password,
     id_original = EXCLUDED.id_original,
     updated_at = CURRENT_TIMESTAMP;
 
+-- Usuários de escuderia: cria/atualiza login <constructor_ref>_c para cada escuderia.
 INSERT INTO users (login, password, tipo, id_original)
 SELECT
     LOWER(TRIM(c.constructor_ref)) || '_c',
@@ -35,6 +37,7 @@ SET password = EXCLUDED.password,
     id_original = EXCLUDED.id_original,
     updated_at = CURRENT_TIMESTAMP;
 
+-- Usuários de piloto: cria/atualiza login <driver_ref>_d para cada piloto.
 INSERT INTO users (login, password, tipo, id_original)
 SELECT
     LOWER(TRIM(d.driver_ref)) || '_d',

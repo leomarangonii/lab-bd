@@ -1,7 +1,7 @@
 /* ============================================================================================================
-   03_t1_deduplicacao_metricas.sql
+   03_deduplicacao_metricas.sql
    ------------------------------------------------------------------------------------------------------------
-   Complemento do T1 depois de a modelagem normalizada já estar no schema.
+   Complemento depois de a modelagem normalizada já estar no schema.
 
    A normalização estrutural NÃO é feita aqui, porque já foi incorporada em 01_schema_tabelas.sql:
    - countries.nationality já existe;
@@ -21,8 +21,9 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS cube;
 CREATE EXTENSION IF NOT EXISTS earthdistance;
 
-DROP TABLE IF EXISTS t1_metrics_before;
-CREATE TABLE t1_metrics_before AS
+DROP TABLE IF EXISTS metrics_before;
+-- Tabela especial metrics_before: snapshot antes da deduplicação. Campos: countries_before/drivers_before/constructors_before/cities_before/airports_before/circuits_before BIGINT.
+CREATE TABLE metrics_before AS
 SELECT
     (SELECT COUNT(*) FROM countries)    AS countries_before,
     (SELECT COUNT(*) FROM drivers)      AS drivers_before,
@@ -31,8 +32,9 @@ SELECT
     (SELECT COUNT(*) FROM airports)     AS airports_before,
     (SELECT COUNT(*) FROM circuits)     AS circuits_before;
 
-DROP TABLE IF EXISTS t1_country_reference_metrics;
-CREATE TABLE t1_country_reference_metrics AS
+DROP TABLE IF EXISTS country_reference_metrics;
+-- Tabela especial country_reference_metrics: confere se pilotos/escuderias ficaram sem país. Campos: entity_type TEXT; total_records BIGINT; records_without_country_id BIGINT.
+CREATE TABLE country_reference_metrics AS
 SELECT
     'drivers' AS entity_type,
     COUNT(*) AS total_records,
@@ -49,8 +51,9 @@ FROM constructors;
    Critério simples e explicável para o relatório: dentro do mesmo país, registros com o mesmo nome ASCII
    normalizado são tratados como candidatos a duplicata. Mantém-se o registro com maior população, depois o
    que possui coordenadas, depois o menor id. */
-DROP TABLE IF EXISTS t1_city_dedup_map;
-CREATE TABLE t1_city_dedup_map AS
+DROP TABLE IF EXISTS city_dedup_map;
+-- Tabela especial city_dedup_map: mapeia cidades duplicadas para a cidade mantida. Campos: duplicate_id INTEGER; keep_id INTEGER; country_id INTEGER; name/ascii_name VARCHAR.
+CREATE TABLE city_dedup_map AS
 WITH ranked AS (
     SELECT
         id AS duplicate_id,
@@ -73,20 +76,21 @@ WHERE duplicate_id <> keep_id;
 
 UPDATE airports a
 SET city_id = m.keep_id
-FROM t1_city_dedup_map m
+FROM city_dedup_map m
 WHERE a.city_id = m.duplicate_id;
 
 UPDATE circuits c
 SET city_id = m.keep_id
-FROM t1_city_dedup_map m
+FROM city_dedup_map m
 WHERE c.city_id = m.duplicate_id;
 
 DELETE FROM cities c
-USING t1_city_dedup_map m
+USING city_dedup_map m
 WHERE c.id = m.duplicate_id;
 
-DROP TABLE IF EXISTS t1_metrics_after;
-CREATE TABLE t1_metrics_after AS
+DROP TABLE IF EXISTS metrics_after;
+-- Tabela especial metrics_after: snapshot após a deduplicação. Campos: countries_after/drivers_after/constructors_after/cities_after/airports_after/circuits_after/city_duplicates_treated BIGINT.
+CREATE TABLE metrics_after AS
 SELECT
     (SELECT COUNT(*) FROM countries)    AS countries_after,
     (SELECT COUNT(*) FROM drivers)      AS drivers_after,
@@ -94,7 +98,7 @@ SELECT
     (SELECT COUNT(*) FROM cities)       AS cities_after,
     (SELECT COUNT(*) FROM airports)     AS airports_after,
     (SELECT COUNT(*) FROM circuits)     AS circuits_after,
-    (SELECT COUNT(*) FROM t1_city_dedup_map) AS city_duplicates_treated;
+    (SELECT COUNT(*) FROM city_dedup_map) AS city_duplicates_treated;
 
 /* ------------------------------------------------------------------------------------------------------------
    Correção de acentos corrompidos na origem (mojibake)
